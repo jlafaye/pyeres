@@ -1,7 +1,7 @@
 from setuptools import setup
 
 setup(
-    name='eres',
+    name='pyeres',
     version='1.0',
     description='Python module to manipulate data from ERES portfolio',
     author='Julien Lafaye',
