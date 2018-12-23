@@ -89,8 +89,9 @@ def list_portfolios(directory):
                             'portfolios')
 
     for entry in os.listdir(root_dir):
-        if os.path.isdir(os.path.join(root_dir,
-                                      entry)):
-            ret.append(entry)
+        fpath = os.path.join(root_dir,
+                             entry)
+        if os.path.isdir(fpath):
+            ret.append((entry, fpath))
 
-    return ret
+    return pd.DataFrame(ret, columns=['name', 'path'])

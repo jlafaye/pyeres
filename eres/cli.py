@@ -4,6 +4,8 @@ import eres.helpers as hpl
 import pandas as pd
 import os
 import logging
+import sys
+
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -31,8 +33,15 @@ def refresh_fund_cache(portfolios):
 def run():
 
     parser = argparse.ArgumentParser(description='Eres command line tool')
-    #parser.add_argument('--refresh-cache',
-    #                    action='store_const')
+    parser.add_argument('--refresh-cache',
+                        action='store_true',
+                        default=False)
+    parser.add_argument('--show-portfolios',
+                        action='store_true',
+                        help='Show portfolios')
+    parser.add_argument('--show-positions',
+                        action='store_true',
+                        help='Show current positions in the porfolio')
     parser.add_argument('--cache-directory',
                         default=expanduser('~/.eres'))
     parser.add_argument('--portfolio',
@@ -42,7 +51,7 @@ def run():
 
     portfolios = hpl.list_portfolios(args.cache_directory)
 
-    refresh_cache = True
+    refresh_cache = args.refresh_cache
 
     if refresh_cache:
         logging.info("Refreshing cache")
@@ -54,10 +63,19 @@ def run():
         for fund_id in fund_ids:
             hpl.download_fund(fund_id)
 
-    portfolio = portfolios[0] if args.portfolio is None else args.portfolio
-    print('portfolio: {}'.format(portfolio))
+    if args.show_portfolios:
+        print('Available portfolio(s):')
+        print(portfolios.to_string())
+        sys.exit(0)
+
+    portfolio = portfolios['name'].values[0] if not args.portfolio else args.portfolio
+    print('Selected portfolio: {}'.format(portfolio))
 
     df_positions = hpl.load_positions(portfolio)
+
+    if args.show_positions:
+        print(df_positions.to_string())
+        sys.exit(0)
 
     df_funds = hpl.load_funds(df_positions['fund_id'].unique())
 
