@@ -50,12 +50,7 @@ def run():
     print('Selected portfolio: {}'.format(portfolio))
 
     positions = hpl.load_positions(portfolio)
-
-    daily_positions = (positions.set_index(['date', 'fund_id'])
-                                .sort_index()
-                                .unstack()
-                                .resample('1d').ffill().stack()
-                                .reset_index())
+    daily_positions = hpl.expand_to_daily(positions, 'date', ['fund_id'])
 
     if args.show_positions:
         print('Positions')
@@ -63,15 +58,11 @@ def run():
         sys.exit(0)
 
     funds = hpl.load_funds(positions['fund_id'].unique())
+    daily_funds = hpl.expand_to_daily(funds, 'date', ['fund_id'])
 
-    daily_funds = (funds.set_index(['date', 'fund_id'])
-                        .sort_index()
-                        .unstack()
-                        .resample('1d').ffill().stack()
-                        .reset_index())
-
+    # merge funds + positions into a single huge
+    # dataframe with one row per day
     df = daily_positions.merge(daily_funds)
-
     df['volume'] = df['price'] * df['equities']
 
     valo = pd.DataFrame({'valo': df.groupby('date')['volume'].sum()})

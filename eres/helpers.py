@@ -4,6 +4,7 @@ from urllib.request import urlopen
 import pandas as pd
 import logging
 import datetime as dt
+import numpy as np
 
 DEFAULT_ERES_DIRECTORY=os.path.join(expanduser('~/.eres'))
 base_directory = DEFAULT_ERES_DIRECTORY
@@ -17,6 +18,19 @@ def fill_missing_values(df_funds):
             .reset_index() \
             .rename(columns={0: 'price'})
     return df_funds
+
+
+def expand_to_daily(df, date_column, key_columns):
+    df = (df.set_index([date_column] + key_columns)
+            .sort_index()
+            .unstack())
+    # we add a date in the future to interpolate from
+    # the last date available to yesterday
+    df.loc[dt.datetime.now()] = np.nan
+    return (df.resample('1d')
+              .ffill()
+              .stack()
+              .reset_index())
 
 
 def download_fund(fund_id, force=False):
