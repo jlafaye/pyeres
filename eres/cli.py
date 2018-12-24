@@ -2,33 +2,12 @@ import argparse
 from os.path import expanduser
 import eres.helpers as hpl
 import pandas as pd
-import os
 import logging
 import sys
 
 
 logging.basicConfig(level=logging.DEBUG)
 
-#def get_filename_for_portfolio(portfolio,
-#                               directory):
-#    return os.path.join(directory,
-#                        'portfolios',
-#                        portfolio,
-#                        'positions.csv')
-
-def refresh_cache(fund_ids,
-                  directory):
-    for fund_id in fund_ids:
-        hpl.download_fund(fund_id, directory)
-
-
-
-def refresh_fund_cache(portfolios):
-	for portfolio in portfolios:
-		fname = get_fname_for_portfolio(portfolio)
-		positions = pd.read_csv(fname)
-		fund_ids = positions['fund_id'].unique()
-		print("fund_ids:", fund_ids)
 
 def run():
 
@@ -41,6 +20,7 @@ def run():
                         help='Show portfolios')
     parser.add_argument('--show-positions',
                         action='store_true',
+                        default=False,
                         help='Show current positions in the porfolio')
     parser.add_argument('--cache-directory',
                         default=expanduser('~/.eres'))
@@ -51,12 +31,10 @@ def run():
 
     portfolios = hpl.list_portfolios(args.cache_directory)
 
-    refresh_cache = args.refresh_cache
-
-    if refresh_cache:
+    if args.refresh_cache:
         logging.info("Refreshing cache")
         fund_ids = []
-        for portfolio in portfolios:
+        for portfolio in portfolios['name'].unique():
             positions = hpl.load_positions(portfolio)
             fund_ids += list(positions['fund_id'].unique())
         fund_ids = list(set(fund_ids))
@@ -71,25 +49,38 @@ def run():
     portfolio = portfolios['name'].values[0] if not args.portfolio else args.portfolio
     print('Selected portfolio: {}'.format(portfolio))
 
-    df_positions = hpl.load_positions(portfolio)
+    positions = hpl.load_positions(portfolio)
+
+    daily_positions = (positions.set_index(['date', 'fund_id'])
+                                .sort_index()
+                                .unstack()
+                                .resample('1d').ffill().stack()
+                                .reset_index())
 
     if args.show_positions:
-        print(df_positions.to_string())
+        print('Positions')
+        print(positions.to_string())
         sys.exit(0)
 
-    df_funds = hpl.load_funds(df_positions['fund_id'].unique())
+    funds = hpl.load_funds(positions['fund_id'].unique())
 
-    # merge with positions
-    df = df_funds.merge(df_positions)
+    daily_funds = (funds.set_index(['date', 'fund_id'])
+                        .sort_index()
+                        .unstack()
+                        .resample('1d').ffill().stack()
+                        .reset_index())
 
-    df['valo'] = df['price'] * df['equities']
-    df_valo = df.groupby('dt').sum()[['valo']]
+    df = daily_positions.merge(daily_funds)
 
-    for lag in [1, 30, 180]:
-        df_valo['%dd_net' % lag] = df_valo['valo'] - df_valo['valo'].shift(lag)
-        df_valo['%dd_ratio' % lag] = 100. * df_valo['%dd_net' % lag] / df_valo['valo'].shift(lag)
+    df['volume'] = df['price'] * df['equities']
 
-    print(df_valo.tail(30).to_string())
+    valo = pd.DataFrame({'valo': df.groupby('date')['volume'].sum()})
 
-    hpl.write_valo(portfolio, df_valo)
+    for lag in [1, 30, 180, 360]:
+        valo['%dd_net' % lag] = valo['valo'] - valo['valo'].shift(lag)
+        valo['%dd_ratio' % lag] = 100. * valo['%dd_net' % lag] / valo['valo'].shift(lag)
+
+    print(valo.tail(30).to_string())
+
+    hpl.write_valo(portfolio, valo)
 

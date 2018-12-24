@@ -8,8 +8,9 @@ import datetime as dt
 DEFAULT_ERES_DIRECTORY=os.path.join(expanduser('~/.eres'))
 base_directory = DEFAULT_ERES_DIRECTORY
 
+
 def fill_missing_values(df_funds):
-    df_funds = df_funds.groupby(['dt', 'fund_id']).first()['price'].sort_index() \
+    df_funds = df_funds.groupby(['date', 'fund_id']).first()['price'].sort_index() \
             .unstack(level=-1) \
             .fillna(method='ffill') \
             .stack() \
@@ -17,14 +18,14 @@ def fill_missing_values(df_funds):
             .rename(columns={0: 'price'})
     return df_funds
 
-def download_fund(fund_id, force=False):
 
+def download_fund(fund_id, force=False):
     fname = get_fname_for_fund(fund_id)
     mtime = os.stat(fname).st_mtime
     last_refresh = dt.datetime.fromtimestamp(mtime)
 
     if not force and \
-        dt.datetime.now() - last_refresh < dt.timedelta(0, 12):
+            dt.datetime.now() - last_refresh < dt.timedelta(0, 12):
         logging.debug('No refresh required for fund_id[%d], last refresh[%s]' \
                         % (fund_id, str(last_refresh)))
         return
@@ -40,13 +41,12 @@ def download_fund(fund_id, force=False):
 
 
 def load_fund(fund_id):
-
     fname = get_fname_for_fund(fund_id)
 
     return pd.read_csv(fname,
-                       names=['fund_id', 'fund_name', 'dt', 'price'],
+                       names=['fund_id', 'fund_name', 'date', 'price'],
                        delimiter=';',
-                       parse_dates=['dt'])
+                       parse_dates=['date'])
 
 def load_funds(fund_ids):
     l = []
@@ -58,10 +58,13 @@ def load_funds(fund_ids):
 
 def load_positions(portfolio):
     fname = get_fname_for_positions(portfolio)
-    return pd.read_csv(fname)
+    df = pd.read_csv(fname, parse_dates=['date'])
+    return df
+
 
 def get_fname_for_fund(fund_id):
     return os.path.join(base_directory, '%d.csv' % fund_id)
+
 
 def get_fname_for_valo(portfolio):
     return os.path.join(base_directory,
@@ -76,11 +79,13 @@ def get_fname_for_positions(portfolio):
                         portfolio,
                         'positions.csv')
 
+
 def write_valo(portfolio, df_valo):
 
     fname = get_fname_for_valo(portfolio)
 
     df_valo.to_csv(fname)
+
 
 def list_portfolios(directory):
 
