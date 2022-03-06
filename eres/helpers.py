@@ -21,9 +21,12 @@ def fill_missing_values(df_funds):
 
 
 def expand_to_daily(df, date_column, key_columns):
-    df = (df.set_index([date_column] + key_columns)
-            .sort_index()
-            .unstack())
+    df = (
+        df
+        .set_index([date_column] + key_columns)
+        .sort_index()
+        .unstack()
+    )
     # we add a date in the future to interpolate from
     # the last date available to yesterday
     df.loc[dt.datetime.now()] = np.nan
@@ -35,27 +38,44 @@ def expand_to_daily(df, date_column, key_columns):
 
 def download_fund(fund_id, force=False):
     fname = get_fname_for_fund(fund_id)
-    mtime = os.stat(fname).st_mtime
-    last_refresh = dt.datetime.fromtimestamp(mtime)
+    if os.path.exists(fname):
+        mtime = os.stat(fname).st_mtime
+        last_refresh = dt.datetime.fromtimestamp(mtime)
+    else:
+        last_refresh = None
 
-    if not force and \
+    if last_refresh is not None and not force and \
             dt.datetime.now() - last_refresh < dt.timedelta(0, 12):
         logging.debug('No refresh required for fund_id[%d], last refresh[%s]' \
                         % (fund_id, str(last_refresh)))
         return
 
-    url = 'https://www.eres-group.com/eres/export.php?idFond=%d&format=CSV' \
-            % fund_id
+    url = f"https://www.eres-group.com/eres/new_fiche_json.php?id={fund_id}"
+    logging.info(f'Downloading {url}')
     response = urlopen(url)
-    csv = response.read()
+    data = response.read().decode()
 
-    fp = open(fname, 'w')
-    fp.write(csv.decode())
-    logging.info('writing %s' % fname)
+    with open(fname, 'w') as fp:
+        fp.write(data)
+        logging.info('writing %s' % fname)
 
 
 def load_fund(fund_id):
     fname = get_fname_for_fund(fund_id)
+
+    df = (
+        pd
+        .read_json(fname) #, parse_dates=['d'])
+        .rename(columns={
+            'd': 'date',
+            'p': 'price'
+        })
+    )
+    df['fund_id'] = fund_id
+    df['fund_name'] = f'{fund_id}' 
+    df['date'] = pd.to_datetime(df['date'], format='%Y-%m-%d')
+
+    return df
 
     return pd.read_csv(fname,
                        names=['fund_id', 'fund_name', 'date', 'price'],
@@ -77,7 +97,7 @@ def load_positions(portfolio):
 
 
 def get_fname_for_fund(fund_id):
-    return os.path.join(base_directory, '%d.csv' % fund_id)
+    return os.path.join(base_directory, f'{fund_id}.json')
 
 
 def get_fname_for_valo(portfolio):
